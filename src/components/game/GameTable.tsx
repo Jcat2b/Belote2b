@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useGameStore } from '@/store/game';
 import { PlayingCard } from './PlayingCard';
+import { ScoreDisplay } from './ScoreDisplay';
 import { Button } from '@/components/ui/Button';
 import { Heart, Diamond, Club, Spade, X } from 'lucide-react';
 
@@ -14,10 +15,10 @@ const SUITS = [
 const BID_VALUES = [...Array.from({ length: 9 }, (_, i) => (i + 8) * 10), 'capot'];
 
 const POSITIONS = [
-  { id: 'north', index: 0, className: 'top-4 left-1/2 -translate-x-1/2' },
-  { id: 'east', index: 1, className: 'top-1/2 right-4 -translate-y-1/2' },
-  { id: 'south', index: 2, className: 'bottom-4 left-1/2 -translate-x-1/2' },
-  { id: 'west', index: 3, className: 'top-1/2 left-4 -translate-y-1/2' },
+  { id: 'north', index: 2, className: 'top-4 left-1/2 -translate-x-1/2' },
+  { id: 'east', index: 3, className: 'top-1/2 right-4 -translate-y-1/2' },
+  { id: 'south', index: 0, className: 'bottom-4 left-1/2 -translate-x-1/2' },
+  { id: 'west', index: 1, className: 'top-1/2 left-4 -translate-y-1/2' },
 ];
 
 export const GameTable = () => {
@@ -44,16 +45,43 @@ export const GameTable = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (currentPlayer === 0 || players.length === 0) return;
+
+    const botTimeout = setTimeout(() => {
+      const player = players[currentPlayer];
+      
+      if (phase === 'bidding') {
+        if (!currentBid) {
+          const randomPoints = Math.floor(Math.random() * (110 - 80 + 1)) + 80;
+          const randomSuit = SUITS[Math.floor(Math.random() * SUITS.length)].name;
+          setBid(player.id, randomSuit, randomPoints);
+        } else {
+          passBid(player.id);
+        }
+      } else if (phase === 'playing') {
+        let playableCards = player.hand;
+        
+        if (currentTrick.length > 0) {
+          const leadSuit = currentTrick[0].suit;
+          const hasSuit = player.hand.some(c => c.suit === leadSuit);
+          
+          if (hasSuit) {
+            playableCards = player.hand.filter(c => c.suit === leadSuit);
+          }
+        }
+        
+        const randomCard = playableCards[Math.floor(Math.random() * playableCards.length)];
+        playCard(player.id, randomCard);
+      }
+    }, 1000);
+
+    return () => clearTimeout(botTimeout);
+  }, [currentPlayer, phase, players, currentTrick]);
+
   if (players.length === 0) {
     return <div>Initialisation de la partie...</div>;
   }
-
-  const currentPlayerHand = players[currentPlayer]?.hand || [];
-  const currentPlayerTeam = players[currentPlayer]?.team;
-  const bidderTeam = players.find(p => p.id === currentBid?.playerId)?.team;
-
-  const canContre = currentBid && !currentBid.contre && currentPlayerTeam !== bidderTeam;
-  const canSurContre = currentBid?.contre && !currentBid.surContre && currentPlayerTeam === bidderTeam;
 
   const handleCardPlay = (card: Card) => {
     const player = players[currentPlayer];
@@ -66,39 +94,6 @@ export const GameTable = () => {
     }
 
     playCard(player.id, card);
-  };
-
-  const renderPlayerPosition = (position: typeof POSITIONS[number]) => {
-    const player = players[position.index];
-    if (!player) return null;
-
-    const isCurrentPlayer = currentPlayer === position.index;
-
-    return (
-      <div key={position.id} className={`absolute ${position.className}`}>
-        <div className={`rounded-lg bg-white/90 p-2 shadow-lg ${
-          isCurrentPlayer ? 'ring-2 ring-blue-500' : ''
-        }`}>
-          <p className="text-center font-medium">{player.name}</p>
-          {isCurrentPlayer && (
-            <p className="text-center text-xs text-blue-600">Tour actuel</p>
-          )}
-          <div className="mt-2 flex flex-wrap gap-0.5 justify-center">
-            {player.hand.map((card, index) => (
-              <PlayingCard
-                key={`${card.suit}-${card.rank}-${index}`}
-                card={card}
-                className={`transform scale-90 origin-top ${
-                  isCurrentPlayer && phase === 'playing' ? 'hover:-translate-y-1 cursor-pointer' : ''
-                }`}
-                onClick={isCurrentPlayer && phase === 'playing' ? () => handleCardPlay(card) : undefined}
-                faceDown={!isCurrentPlayer}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
   };
 
   const renderCurrentTrick = () => {
@@ -123,10 +118,7 @@ export const GameTable = () => {
   };
 
   const renderBiddingControls = () => {
-    if (phase !== 'bidding') return null;
-
-    const currentPlayerId = players[currentPlayer]?.id;
-    if (!currentPlayerId) return null;
+    if (phase !== 'bidding' || currentPlayer !== 0) return null;
 
     return (
       <div className="rounded-lg bg-white/90 p-4 shadow-lg">
@@ -137,30 +129,12 @@ export const GameTable = () => {
         
         <Button
           variant="outline"
-          onClick={() => passBid(currentPlayerId)}
+          onClick={() => passBid(players[currentPlayer].id)}
           className="mb-4 w-full"
         >
           <X className="mr-2 h-4 w-4" />
           Passer
         </Button>
-
-        {canContre && (
-          <Button
-            onClick={() => contre(currentPlayerId)}
-            className="mb-4 w-full bg-red-600 hover:bg-red-700"
-          >
-            Contre
-          </Button>
-        )}
-        
-        {canSurContre && (
-          <Button
-            onClick={() => surContre(currentPlayerId)}
-            className="mb-4 w-full bg-purple-600 hover:bg-purple-700"
-          >
-            Sur-contre
-          </Button>
-        )}
 
         <div className="flex gap-4">
           <div className="flex flex-col gap-2">
@@ -198,7 +172,7 @@ export const GameTable = () => {
                       points <= (currentBid.points === 'capot' ? 160 : currentBid.points) : 
                       false
                   )}
-                  onClick={() => setBid(currentPlayerId, name, points)}
+                  onClick={() => setBid(players[currentPlayer].id, name, points)}
                   className={`w-12 ${
                     currentBid?.suit === name && currentBid?.points === points
                       ? 'bg-blue-600 hover:bg-blue-700'
@@ -217,8 +191,51 @@ export const GameTable = () => {
     );
   };
 
+  const renderPlayerPosition = (position: typeof POSITIONS[number]) => {
+    const player = players[position.index];
+    if (!player) return null;
+
+    const isCurrentPlayer = currentPlayer === position.index;
+    const isHumanPlayer = position.index === 0;
+
+    return (
+      <div key={position.id} className={`absolute ${position.className}`}>
+        <div className={`rounded-lg bg-white/90 p-2 shadow-lg ${
+          isCurrentPlayer ? 'ring-2 ring-blue-500' : ''
+        }`}>
+          <p className="text-center font-medium">
+            {player.name}
+            {!isHumanPlayer && ' (Bot)'}
+          </p>
+          {isCurrentPlayer && (
+            <p className="text-center text-xs text-blue-600">Tour actuel</p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-0.5 justify-center">
+            {player.hand.map((card, index) => (
+              <PlayingCard
+                key={`${card.suit}-${card.rank}-${index}`}
+                card={card}
+                className={`transform scale-90 origin-top ${
+                  isCurrentPlayer && isHumanPlayer && phase === 'playing' 
+                    ? 'hover:-translate-y-1 cursor-pointer' 
+                    : ''
+                }`}
+                onClick={isCurrentPlayer && isHumanPlayer && phase === 'playing' 
+                  ? () => handleCardPlay(card) 
+                  : undefined}
+                faceDown={false}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="relative mx-auto h-[800px] w-full max-w-6xl rounded-3xl bg-gradient-to-br from-green-700 to-green-900 p-8 shadow-2xl">
+      <ScoreDisplay team1Score={scores.team1} team2Score={scores.team2} />
+      
       {POSITIONS.map(renderPlayerPosition)}
       {renderCurrentTrick()}
 
@@ -240,7 +257,7 @@ export const GameTable = () => {
         </div>
       )}
 
-      <div className="absolute right-4 top-4 space-y-4">
+      <div className="absolute right-4 top-24 space-y-4">
         {renderBiddingControls()}
       </div>
     </div>
