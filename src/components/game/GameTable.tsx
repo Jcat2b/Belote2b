@@ -4,6 +4,7 @@ import { PlayingCard } from './PlayingCard';
 import { ScoreDisplay } from './ScoreDisplay';
 import { Button } from '@/components/ui/Button';
 import { Heart, Diamond, Club, Spade, X } from 'lucide-react';
+import type { Card } from '@/types/game';
 
 const SUITS = [
   { name: 'spades', icon: Spade },
@@ -15,10 +16,10 @@ const SUITS = [
 const BID_VALUES = [...Array.from({ length: 9 }, (_, i) => (i + 8) * 10), 'capot'];
 
 const POSITIONS = [
-  { id: 'north', index: 2, className: 'top-4 left-1/2 -translate-x-1/2' },
-  { id: 'east', index: 3, className: 'top-1/2 right-4 -translate-y-1/2' },
-  { id: 'south', index: 0, className: 'bottom-4 left-1/2 -translate-x-1/2' },
-  { id: 'west', index: 1, className: 'top-1/2 left-4 -translate-y-1/2' },
+  { id: 'north', index: 2, className: 'top-0 left-1/2 -translate-x-1/2' },
+  { id: 'east', index: 3, className: 'top-1/2 right-0 -translate-y-1/2' },
+  { id: 'south', index: 0, className: 'bottom-0 left-1/2 -translate-x-1/2' },
+  { id: 'west', index: 1, className: 'top-1/2 left-0 -translate-y-1/2' },
 ];
 
 export const GameTable = () => {
@@ -59,20 +60,6 @@ export const GameTable = () => {
         } else {
           passBid(player.id);
         }
-      } else if (phase === 'playing') {
-        let playableCards = player.hand;
-        
-        if (currentTrick.length > 0) {
-          const leadSuit = currentTrick[0].suit;
-          const hasSuit = player.hand.some(c => c.suit === leadSuit);
-          
-          if (hasSuit) {
-            playableCards = player.hand.filter(c => c.suit === leadSuit);
-          }
-        }
-        
-        const randomCard = playableCards[Math.floor(Math.random() * playableCards.length)];
-        playCard(player.id, randomCard);
       }
     }, 1000);
 
@@ -196,31 +183,39 @@ export const GameTable = () => {
     if (!player) return null;
 
     const isCurrentPlayer = currentPlayer === position.index;
-    const isHumanPlayer = position.index === 0;
+    const isVerticalPosition = position.id === 'east' || position.id === 'west';
 
     return (
       <div key={position.id} className={`absolute ${position.className}`}>
         <div className={`rounded-lg bg-white/90 p-2 shadow-lg ${
           isCurrentPlayer ? 'ring-2 ring-blue-500' : ''
-        }`}>
-          <p className="text-center font-medium">
-            {player.name}
-            {!isHumanPlayer && ' (Bot)'}
-          </p>
-          {isCurrentPlayer && (
-            <p className="text-center text-xs text-blue-600">Tour actuel</p>
-          )}
-          <div className="mt-2 flex flex-wrap gap-0.5 justify-center">
+        } ${isVerticalPosition ? 'transform-gpu rotate-90' : ''}`}>
+          <div className={`${isVerticalPosition ? '-rotate-90' : ''}`}>
+            <p className="text-center font-medium">
+              {player.name}
+              {position.index !== 0 && ' (Bot)'}
+            </p>
+            {isCurrentPlayer && (
+              <p className="text-center text-xs text-blue-600">
+                Tour actuel
+              </p>
+            )}
+          </div>
+          <div className={`mt-2 ${
+            isVerticalPosition 
+              ? 'flex flex-wrap gap-0.5 justify-start items-start max-h-[400px]' 
+              : 'flex flex-row gap-0.5 justify-center'
+          }`}>
             {player.hand.map((card, index) => (
               <PlayingCard
                 key={`${card.suit}-${card.rank}-${index}`}
                 card={card}
                 className={`transform scale-90 origin-top ${
-                  isCurrentPlayer && isHumanPlayer && phase === 'playing' 
+                  isCurrentPlayer && phase === 'playing' 
                     ? 'hover:-translate-y-1 cursor-pointer' 
                     : ''
-                }`}
-                onClick={isCurrentPlayer && isHumanPlayer && phase === 'playing' 
+                } ${isVerticalPosition ? '-rotate-180' : ''}`}
+                onClick={isCurrentPlayer && phase === 'playing' 
                   ? () => handleCardPlay(card) 
                   : undefined}
                 faceDown={false}
