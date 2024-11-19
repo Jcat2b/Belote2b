@@ -187,13 +187,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
         newTricks.team2.push(newTrick);
       }
 
+      // Calculer les points avec le bonus de 10 points pour le dernier pli
+      const isLastTrick = newPlayers.every(p => p.hand.length === 0);
+      const lastTrickBonus = isLastTrick ? 10 : 0;
+
       const newScores = {
-        team1: winningTeam === 1 ? state.scores.team1 + trickPoints : state.scores.team1,
-        team2: winningTeam === 2 ? state.scores.team2 + trickPoints : state.scores.team2,
+        team1: winningTeam === 1 ? state.scores.team1 + trickPoints + (isLastTrick ? lastTrickBonus : 0) : state.scores.team1,
+        team2: winningTeam === 2 ? state.scores.team2 + trickPoints + (isLastTrick ? lastTrickBonus : 0) : state.scores.team2,
       };
 
       // Si c'était la dernière carte
-      if (newPlayers.every(p => p.hand.length === 0)) {
+      if (isLastTrick) {
         set({
           players: newPlayers,
           currentTrick: [],
